@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document</title>
+<link rel="stylesheet" href="css.css"></link>
+</head>
+<body>
+<div class="wrap">
+    <div class="screen">
+        <canvas id="canvas"></canvas>
+        <div id="debug"></div>
+    </div>
+    <div id="sidebar"></div>
+</div>
+
+<script src="util.js"></script>
+<script src="eventManager.js"></script>
+<script src="control.js"></script>
+<script src="status.js"></script>
+
+<script src="effects.js"></script>
+<script src="character.js"></script>
+<script src="obstacle.js"></script>
+<script src="enemyDrop.js"></script>
+<script src="installationItem.js"></script>
+<script src="UIImage.js"></script>
+
+<script src="main.js"></script>
+<script></script>
+
+<script>
+    
+const debug = document.getElementById("debug");
+const debugIDs = ["posX","posY","fps"]
+let debugMenu = retrieve(debug,debugIDs);
+
+const sidebar = document.getElementById("sidebar");
+const itemIDs = ["example1","fps"]
+
+
+
+const can = document.getElementById("canvas");
+const ctx = can.getContext("2d");
+
+can.width = 600;
+can.height = 600;
+
+ctx.imageSmoothingEnabled = false;
+class Game{
+    constructor(can){
+        this.can = can;
+        this.itemMenu =  retrieve(sidebar,itemIDs,this)
+        this.setItem = null;
+
+        this.status = {exp:0,orb:100,coin:0}
+        this.statuses = [new Status(this,"exp"),new Status(this,"orb"),new Status(this,"coin")];//, new Status(this,"asset")
+
+        this.mouse = {x:0,y:0}
+        this.balletRadius = 5
+        this.player = new Character(this,this.can.width/2,this.can.height/2,10,"PLAYER");
+        this.ballets = [];
+        this.enemies = [new Character(this,200,300,30,"ENEMY")];
+        this.particles = [];
+        this.obstacles = [];
+        this.enemyDrops = [];
+        this.installationItems = [];
+        this.constellationLines = [];
+
+        this.spanwTimer = 0;
+        this.enemySpawnInterval = 2000;
+
+        this.gameOver = false;
+        this.debugPropaty = {}
+
+
+
+        for(let i=0; i<10; i++){
+            this.enemies.push(new Character(this,can.width*Math.random(),0,30,"ENEMY"))
+        }
+
+        this.obstacles.push(new LineObstacle(this,[{x:0,y:0},{x:this.can.width,y:0}]))
+        this.obstacles.push(new LineObstacle(this,[{x:this.can.width,y:0},{x:this.can.width,y:this.can.height}]))
+        this.obstacles.push(new LineObstacle(this,[{x:0,y:this.can.height},{x:this.can.width,y:this.can.height}]))
+        this.obstacles.push(new LineObstacle(this,[{x:0,y:0},{x:0,y:this.can.height}]))
+        this.can.addEventListener("mousemove",e=>{
+            this.mouse.x = e.offsetX;
+            this.mouse.y = e.offsetY;
+        })
+
+
+        this.can.addEventListener("mousedown",e=>{
+            switch(this.setItem){
+                case null:
+                    let angle = Math.atan2(e.offsetY-this.player.y,e.offsetX-this.player.x);
+                    let vx = Math.cos(angle)
+                    let vy = Math.sin(angle)
+                    this.pushBallet(this.player.x+vx*(this.player.r+this.balletRadius),this.player.y+vy*(this.player.r+this.balletRadius),vx,vy)
+                    break;
+                case "example1":
+                    if(this.status.orb > 100){
+                        this.status.orb -= 100
+                        this.installationItems.push(new Twincle(this,this.mouse.x,this.mouse.y))
+                        this.installationItems[this.installationItems.length-1].requestAct = true;
+                        this.installationItems.forEach(item => {
+                            item.checkConstellation();
+                        })
+                    }
+
+                    break;
+            }
+        })
+    }
+    update(deltaTime){
+        this.player.update(deltaTime);
+
+        this.ballets = this.ballets.filter(ballet => !ballet.delete);
+        this.enemies = this.enemies.filter(enemy => !enemy.delete);
+        this.particles = this.particles.filter(particle => !particle.delete);
+        this.enemyDrops = this.enemyDrops.filter(drop => !drop.delete);
+        this.installationItems = this.installationItems.filter(item => !item.delete);
+
+        this.objectUpdate(this.enemyDrops,deltaTime)
+        this.objectUpdate(this.installationItems,deltaTime)
+        this.objectUpdate(this.constellationLines,deltaTime)
+        this.objectUpdate(this.ballets,deltaTime)
+        this.objectUpdate(this.enemies,deltaTime)
+        this.objectUpdate(this.particles,deltaTime)
+        this.objectUpdate(this.obstacles,deltaTime)
+        this.objectUpdate(this.statuses,deltaTime)
+
+        if(this.installationItems.length > 0){
+            this.status.exp = this.installationItems.reduce((item,current) => item+current.exp,0);
+        }
+        this.spawnMethod(deltaTime);
+
+        this.debugUpdate();
+
+    }
+
+    draw(ctx){
+        this.player.draw(ctx)
+        this.objectDraw(ctx,this.enemyDrops)
+        this.objectDraw(ctx,this.installationItems)
+        this.objectDraw(ctx,this.constellationLines)
+        this.objectDraw(ctx,this.ballets)
+        this.objectDraw(ctx,this.enemies)
+        this.objectDraw(ctx,this.particles)
+        this.objectDraw(ctx,this.obstacles)
+        this.objectDraw(ctx,this.statuses)
+    }
+    objectUpdate(objects,deltaTime){
+        objects.forEach(obj => {
+            obj.update(deltaTime);
+        })
+    }
+    objectDraw(ctx,objects){
+        objects.forEach(obj => {
+            obj.draw(ctx);
+        })
+    }
+    
+    pushInstallationItem(x,y){
+
+    }
+    conectInstallationItem(A,B){
+        this.constellationLines.push(new ConstellationLine(this,A,B))
+    }
+    pushOrb(x,y){
+        this.enemyDrops.push(new Orb(this,x,y))
+    }
+    pushCoin(x,y,vx,vy,speed){
+
+        this.enemyDrops.push(new Coin(this,x,y,vx,vy,speed))
+    }
+    pushEnemy(){
+        let spawnSide = Math.random()<0.5;
+        let x,y;
+        if(spawnSide){
+            x = Math.random() * can.width;
+            y = Math.random()<0.5 ? 0 : can.height
+        }else{
+            y = Math.random() * can.height;
+            x = Math.random()<0.5 ? 0 : can.width;
+        }
+        this.enemies.push(new Character(this,x,y,30,"ENEMY"))
+
+    }
+    spawnMethod(deltaTime){
+        this.spanwTimer += deltaTime;
+        if(this.spanwTimer > this.enemySpawnInterval){
+            this.pushEnemy();
+            this.spanwTimer = 0;
+            this.enemySpawnInterval -= 10;
+        }
+    }
+    pushBallet(x,y,vx,vy){
+        this.ballets.push(new Ballet(can,x,y,vx,vy,this.balletRadius))
+    }
+    checkHit(first,second){
+        let distance = Math.sqrt((second.x-first.x)**2+(second.y-first.y)**2);
+
+        return distance < first.r+second.r
+    }
+    sidebarUpdate(){
+    }
+    debugUpdate(){
+        debugMenu.posX.textContent = `posX: ${this.player.x.toFixed(0)}`
+        debugMenu.posY.textContent = `posY: ${this.player.y.toFixed(0)}`
+        debugMenu.fps.textContent = `FPS : ${nowFps}`
+        debugMenu.fps.style.background = `linear-gradient(to right, rgba(0,255,0,0.2) ${(addDeltaTime/1000)*100}%, rgba(0,0,255,0.2) ${0}%)`
+    }
+}
+
+let game = new Game(can);
+let lastTime = 0;
+let requestFrame = 1000/60;
+let addDeltaTime = 0;
+let timeInterval = 0;
+let timeCounter = 0;
+let nowFps = 0;
+
+
+function animate(timeStamp){
+    
+    deltaTime = timeStamp - lastTime;
+    lastTime = timeStamp;
+    
+    timeInterval += deltaTime;
+    addDeltaTime += deltaTime;
+    if(timeInterval>requestFrame*10)addDeltaTime = timeInterval = 0;
+    while(timeInterval > requestFrame){
+        ctx.fillStyle = "#111"
+        ctx.fillRect(0,0,can.width,can.height)
+        if(!game.gameOver){
+            game.update(requestFrame);
+        }
+        game.draw(ctx)
+        timeInterval -= requestFrame;
+        timeCounter++;
+    }
+
+    if(addDeltaTime>1000){
+        nowFps = timeCounter;
+        timeCounter = 0;
+        addDeltaTime -= 1000
+    }
+
+    
+
+
+
+
+    requestAnimationFrame(animate);
+}
+
+animate(0);
+
+
+</script>
+</body>
+</html>
