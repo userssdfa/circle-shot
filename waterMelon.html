@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>a</title>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+
+const can = document.getElementById("canvas");
+const ctx = can.getContext("2d");
+
+
+can.width = 500;
+can.height = 750;
+can.style.border = "2px solid #555"
+
+let fruitList = [10,25,40,55,100,120,130,155,200]
+let fruitsColor = ["#FFFF00","#76EB00","#00FF00","#00EB60","#00FFCF","#00BBEB","#006CFF","#0009EB","#5B00FF"]
+let dropType = 6
+let gameOverHeight = 100;
+class Fluit {
+    constructor(can,x,y,vx,vy,beforeType=null){
+        this.can = can;
+        this.x = x;
+        this.y = y;
+        this.type = beforeType!==null ? beforeType+1: Math.floor(Math.random()*dropType);
+        this.r = fruitList[this.type]
+        this.gy = 0.08;
+        this.mass = 1
+        this.velocity = {
+            x:vx,y:vy
+        }
+        this.friction = 0.99;
+        this.color = fruitsColor[this.type]
+        this.delete = false;
+
+        this.gameOverFrame = 200;
+        this.currentFrame = 0;
+        this.gameOver = false;
+    }
+    render(ctx,i){
+        this.velocity.y *= this.friction;
+        this.velocity.x *= this.friction;
+        this.velocity.y += this.gy
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
+        if(this.x-this.r <= 0){
+            this.velocity.x = -this.velocity.x*0.5
+            this.x = this.r;
+
+        }
+        if(this.x+this.r >= can.width){
+            this.velocity.x = -this.velocity.x*0.5
+            this.x = can.width-this.r
+        }
+        if( this.y+this.r >= can.height){
+            this.velocity.y = -this.velocity.y*0.5
+            this.y = can.height-this.r
+        }
+        if(this.y-this.r <= gameOverHeight ){
+            this.currentFrame++;
+        }
+        if(this.currentFrame > this.gameOverFrame){
+            this.gameOver = true;
+        }
+
+
+
+        let  appearance = 1
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.lineWidth = 3
+        ctx.strokeStyle = "gray"
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.r-appearance,0,Math.PI*2);
+        ctx.stroke();
+        ctx.fill();
+        ctx.restore();
+    }
+}
+class NextFruit{
+    constructor(game,can,beforeType = null){
+        this.game = game;
+        this.can = can;
+        this.x = 0;
+        this.y = 20;
+        this.type = beforeType;
+        this.r = fruitList[this.type]
+        this.color = fruitsColor[this.type]
+    }
+    render(ctx){
+        this.type = this.game.nextType
+        this.r = fruitList[this.type]
+        this.color = fruitsColor[this.type]
+        
+        ctx.save();
+        ctx.globalAlpha = 0.2
+        ctx.fillStyle = this.color
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+        ctx.stroke();
+        ctx.fill();
+        ctx.restore();
+    }
+}
+class Game{
+    constructor(can){
+        this.can = can;
+
+        this.score = 0;
+        this.fruits = []
+        this.nextType = Math.floor(Math.random()*dropType)
+        this.next = new NextFruit(this,can,this.nextType)
+        this.gameOver = false;
+        window.addEventListener("mousemove",e=>{
+            this.next.x = e.offsetX
+        })
+
+        window.addEventListener("click",e=>{
+            let x = e.offsetX;
+            let y = e.offsetY;
+
+            if(!this.gameOver){
+                this.fruits.push(new Fluit(can,x,0,0,0,this.nextType-1))
+                this.score += fruitList[this.nextType]
+            }
+
+            this.nextType = Math.floor(Math.random()*dropType)
+        })
+
+    }
+    render(ctx){
+
+        this.fruits = this.fruits.filter(fruit => !fruit.delete);
+        this.fruits.sort((a,b)=>a.y - b.y)
+        let p = []
+        this.fruits.forEach((fruit,i)=>{
+            if(fruit.gameOver)this.gameOver = true;
+            this.fruits.forEach((otherFruit,j)=>{
+                if(i===j)return;
+                const dist = distance(fruit.x,fruit.y,otherFruit.x,otherFruit.y); 
+                if(dist<fruit.r+otherFruit.r){
+
+                    resolveCollision(fruit,otherFruit)
+
+                    const angle = Math.atan2(fruit.y-otherFruit.y,fruit.x-otherFruit.x)
+                    const overlap = fruit.r+otherFruit.r-dist;
+                    if(fruit.r === otherFruit.r && !fruit.delete && !otherFruit.delete){
+                        fruit.delete = true;
+                        otherFruit.delete = true;
+                        this.fruits.push(new Fluit(can,fruit.x+Math.cos(angle)*overlap/2, fruit.y+Math.sin(angle)*overlap/2,0,0,fruit.type))
+                        this.score += fruitList[fruit.type+1]
+                    }
+                    fruit.x += Math.cos(angle)*overlap/2
+                    fruit.y += Math.sin(angle)*overlap/2
+                    otherFruit.x -= Math.cos(angle)*overlap/2
+                    otherFruit.y -= Math.sin(angle)*overlap/2
+
+                    
+                }
+            })
+            fruit.render(ctx,i);
+        })
+
+        ctx.fillStyle = "rgba(255,50,50,0.2)";
+        ctx.fillRect(0,0,can.width,gameOverHeight)
+        this.next.render(ctx)
+        ctx.font = "45px 'arial'"
+        ctx.textAlign = "left";
+        ctx.fillStyle = "dimgray"
+        ctx.fillText("SCORE:"+this.score,0,45)
+        
+        if(this.gameOver){
+            ctx.font = "50px 'arial'"
+            let text = "GAME OVER";
+            let text2 =  "F5 to retry"
+            let w = ctx.measureText(text).width;
+            ctx.fillStyle = "skyblue"
+            ctx.fillText(text,can.width/2-150+3,250+2)
+            ctx.fillStyle = "black";
+            ctx.fillText(text,can.width/2-150,250)
+            ctx.font = "30px 'arial"
+            ctx.fillStyle = "skyblue"
+            ctx.fillText(text2,can.width-w+2,350+2)
+            ctx.fillStyle = "black";
+            ctx.fillText(text2,can.width-w,350)
+            return
+        }
+
+    }
+}
+function rotate(velocity, angle){
+  const rotatedVelocities = {
+    x: velocity.x * Math.cos(angle) - velocity.y * Math.sin(angle),
+    y: velocity.x * Math.sin(angle) + velocity.y * Math.cos(angle),
+  }
+  return rotatedVelocities
+}
+
+function distance(x,y,tx,ty){
+  return Math.sqrt((x-tx)**2+(y-ty)**2)
+}
+
+function resolveCollision(particle, otherParticle){
+  const xVelocityDiff = particle.velocity.x - otherParticle.velocity.x;
+  const yVelocityDiff = particle.velocity.y - otherParticle.velocity.y;
+
+  const xDist = otherParticle.x - particle.x;
+  const yDist = otherParticle.y - particle.y;
+  
+  if(xVelocityDiff * xDist + yVelocityDiff * yDist >= 0){
+    const angle = -Math.atan2(otherParticle.y-particle.y, otherParticle.x-particle.x);
+
+    
+    const m1 = particle.mass;
+    const m2 = otherParticle.mass;
+
+    const u1 = rotate(particle.velocity, angle);
+    const u2 = rotate(otherParticle.velocity, angle);
+
+    const v1 = {x: u1.x * (m1-m2) / (m1+m2) + u2.x * 2 * m2 / (m1+m2), y:u1.y}
+    const v2 = {x: u2.x * (m1-m2) / (m1+m2) + u1.x * 2 * m2 / (m1+m2), y:u2.y}
+
+    const vFinal1 = rotate(v1, -angle);
+    const vFinal2 = rotate(v2, -angle);
+
+    particle.velocity.x = vFinal1.x
+    particle.velocity.y = vFinal1.y
+    otherParticle.velocity.x = vFinal2.x
+    otherParticle.velocity.y = vFinal2.y
+
+
+  }
+
+}
+
+let game = new Game(can)
+function animate(){
+
+    ctx.clearRect(0,0,can.width,can.height);
+    game.render(ctx)
+    requestAnimationFrame(animate)
+}
+
+animate();
+
+</script>
+</body>
+</html>
