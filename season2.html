@@ -24,12 +24,12 @@ const gCtx = gCan.getContext("2d");
 const tCan = document.getElementById("touchAria");
 const tCtx = tCan.getContext("2d");
 
-gCan.width = 380
-gCan.height = 600
+gCan.width = 350
+gCan.height = 500
 gCan.style.border = "2px solid #555"
 
-tCan.width = 380;
-tCan.height = 180;
+tCan.width = 350;
+tCan.height = 150;
 tCan.style.border = "2px solid #555"
 tCan.style.borderTop = "none"
 tCan.style.borderRadius = "0 0 50px 50px"
@@ -63,8 +63,8 @@ class TouchPanel {
     constructor(tCan){
         this.x = 0;
         this.y = 0;
-        this.w = 380;
-        this.h = 180;
+        this.w = 350;
+        this.h = 150;
 
         //drawDot
         this.dotInterval = 15;
