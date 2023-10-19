@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body{
+            margin: 0;
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+            background-color: lightgray;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameAria"></canvas>
+<canvas id="touchAria"></canvas>
+<script>
+const gCan = document.getElementById("gameAria");
+const gCtx = gCan.getContext("2d");
+const tCan = document.getElementById("touchAria");
+const tCtx = tCan.getContext("2d");
+
+gCan.width = 380
+gCan.height = 600
+gCan.style.border = "2px solid #555"
+
+tCan.width = 380;
+tCan.height = 180;
+tCan.style.border = "2px solid #555"
+tCan.style.borderTop = "none"
+tCan.style.borderRadius = "0 0 50px 50px"
+
+gCan.style.marginTop = `${(window.innerHeight - gCan.height - tCan.height)/2}px`
+tCan.style.marginBottom = `${(window.innerHeight - gCan.height - tCan.height)/2}px`
+
+
+gCtx.fillStyle = "dimgray";
+gCtx.fillRect(0,0,gCan.width,gCan.height)
+
+
+class Puddle {
+    constructor(x,y,w,h){
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+    }
+    update(x){
+        this.x = x;
+    }
+    draw(){
+        gCtx.fillStyle = "blue";
+        gCtx.fillRect(this.x,this.y,this.w,this.h)
+    }
+
+}
+
+class TouchPanel {
+    constructor(tCan){
+        this.x = 0;
+        this.y = 0;
+        this.w = 380;
+        this.h = 180;
+
+        //drawDot
+        this.dotInterval = 15;
+        this.dotR = 2;
+        this.margin = 20
+
+        //setEvent
+        this.can = tCan;
+        this.touch = {
+            x:null,y:null,start:false,touch:false
+        }
+
+        this.can.addEventListener("touchstart",e=>{
+            const {x,y} = this.getOffset({ev:e,el:this.can})
+            this.touch.start = true;
+            this.touch.touch = true;
+            this.touch.x = x;
+            this.touch.y = y;
+        })
+        this.can.addEventListener("touchmove",e=>{
+            const {x,y} = this.getOffset({ev:e,el:this.can})
+
+            this.touch.touch = true;
+            this.touch.x = x;
+            this.touch.y = y;
+        })
+        this.can.addEventListener("touchend",e=>{
+
+            this.touch.touch = false;
+            this.touch.x = null;
+            this.touch.y = null;
+        })
+    }
+    getOffset({ev:ev,el:el}){
+        const posX = ev.changedTouches[0].clientX;
+        const posY = ev.changedTouches[0].clientY;
+        const rect = el.getBoundingClientRect();
+        return {x:posX-rect.left,y:posY-rect.top}
+    }
+    update(){
+        this.touch.start = false;
+    }
+    draw(){
+
+        const col = Math.floor((this.w-this.margin*2)/this.dotInterval);
+        const row = Math.floor((this.h-this.margin*2)/this.dotInterval)
+
+        const marginLeft = this.margin + (this.w-this.margin*2)%this.dotInterval /2
+        const marginTop =  this.margin + (this.h-this.margin*2)%this.dotInterval /2
+
+        tCtx.fillStyle = "gray"
+        for(let y=0; y<=row; y++){
+            for(let x=0; x<=col; x++){
+                tCtx.beginPath();
+                tCtx.arc(x*this.dotInterval+marginLeft,y*this.dotInterval+marginTop,this.dotR,0,Math.PI*2)
+                tCtx.fill();
+            }
+        }
+
+        tCtx.fillStyle = "rgba(0,0,0,0.2)";
+        tCtx.fillRect(this.x,this.y,this.w,this.h)
+    }
+}
+
+
+class Game{
+    constructor(gCan,tCan){
+
+        this.puddle = new Puddle(200,200,100,100);
+        this.touchPanel = new TouchPanel(tCan);
+    }
+    render(){
+        console.log(this.touchPanel.touch.x)
+        const px = this.touchPanel.touch.x === null ? 100 : this.touchPanel.touch.x
+        this.puddle.update(px)
+        this.puddle.draw();
+        this.touchPanel.draw();
+        this.touchPanel.update();
+    }
+}
+
+
+const game = new Game(gCan, tCan)
+
+
+
+function animate(){
+    gCtx.clearRect(0,0,gCan.width,gCan.height)
+    tCtx.clearRect(0,0,tCan.width,tCan.height)
+
+    game.render();
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>
