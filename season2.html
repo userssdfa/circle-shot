@@ -61,6 +61,14 @@ class TouchPanel {
             sx:null,sy:null,swipe:null
         }
 
+        window.addEventListener("keydown",e=>{
+            //gCtx.clearRect(0,0,gCan.width,gCan.height)
+            //tCtx.clearRect(0,0,tCan.width,tCan.height)
+
+            //game.render();
+            //touchPanel.draw();
+            //touchPanel.update();
+        })
         this.can.addEventListener("touchstart",e=>{
             const {x,y} = this.getOffset({ev:e,el:this.can})
             this.touch.start = true;
@@ -71,6 +79,12 @@ class TouchPanel {
             this.touch.sy = y;
         })
         this.can.addEventListener("touchmove",e=>{
+            //gCtx.clearRect(0,0,gCan.width,gCan.height)
+            //tCtx.clearRect(0,0,tCan.width,tCan.height)
+//
+            //game.render();
+            //touchPanel.draw();
+            //touchPanel.update();
             const {x,y} = this.getOffset({ev:e,el:this.can})
 
             this.touch.touch = true;
@@ -139,18 +153,25 @@ class Ball {
         this.xBef = this.x;
         this.yBef = this.y;
 
-
+        
+        
         this.dx = -0.5;
         this.dy = -0.5;
-        this.speed = 5
-
+        this.speed = 4
+        
         this.angle = 0;
-
+        this.collisionNumber = 10
+        this.collisionAreas = []
         this.release = false;
     }
     update(){
         this.xBef = this.x;
         this.yBef = this.y;
+        
+        this.collisionAreas = []
+
+
+        //離す前、後
         if(tStatus.swipe === "up")this.release = true;
         if(this.release){
             this.x += this.dx* this.speed;
@@ -160,31 +181,36 @@ class Ball {
             this.y = this.puddle.y;
         }
 
-        //上左右の反射
-        if(this.x<this.r){this.x = this.r;this.dx *= -1;}
-        else if(this.x>this.can.width-this.r){this.x = this.can.width-this.r; this.dx *= -1;}
-        if(this.y<this.r){this.y = this.r;this.dy *= -1;}
-        //パドル反射
-        else if(this.y>this.puddle.y-this.r && this.x>this.puddle.x && this.x<this.puddle.x+this.puddle.w){
-            
-   
+        this.angle = Math.atan2(this.y-this.yBef,this.x-this.xBef)
 
+        let a = this.speed / this.collisionNumber;
+        this.collisionAreas.push({x:this.xBef,y:this.yBef,r:this.r})
+        for(let i=0; i<this.collisionNumber; i++){
+            let x = Math.cos(this.angle)*(a*i)+this.xBef
+            let y = Math.sin(this.angle)*(a*i)+this.yBef
+            this.collisionAreas.push({x:x,y:y,r:this.r})
+            gCtx.fillStyle = "rgba(0,0,255,0.1)"
+            gCtx.beginPath();
+            gCtx.arc(x,y,5,0,Math.PI*2);
+            gCtx.fill();
+        }
+
+        //パドル反射
+        if(this.y>this.puddle.y-this.r && this.x>this.puddle.x && this.x<this.puddle.x+this.puddle.w){
 
             this.y = this.puddle.y-this.r;
             this.dy *= -1
-
-
-
         }
         //下判定
         else if(this.y+this.r>this.can.height)console.log("game over")
 
 
-        this.angle = Math.atan2(this.y-this.yBef,this.x-this.xBef)
+        
     }
 
     draw(){
         gCtx.lineWidth = 1
+        gCtx.strokeStyle = "blue"
         gCtx.fillStyle = "#07F5E1";
         gCtx.beginPath();
         gCtx.arc(this.x,this.y,this.r,0,Math.PI*2)
@@ -237,8 +263,8 @@ class Block{
         this.w = w;
         this.h = h;
 
-        this.hp = 1;
-        this.colors = ["black","orange"]
+        this.hp = Math.floor(Math.random()*5);
+        this.colors = ["black","orange","green","skyblue","pink","tan"]
     }
     draw(){
         gCtx.save();
@@ -296,6 +322,25 @@ class Block{
     }
 }
 
+class Segment{
+    constructor(A,B){
+        this.A = A;
+        this.B = B;
+
+        this.c = "blue";
+        this.width = 3
+        this.delete = false;
+    }
+    draw(){
+        gCtx.lineWidth = this.width
+        gCtx.strokeStyle = this.c;
+        gCtx.beginPath()
+        gCtx.moveTo(this.A.x,this.A.y)
+        gCtx.lineTo(this.B.x,this.B.y)
+        gCtx.stroke();
+    }
+}
+
 
 class Game{
     constructor(gCan,tCan){
@@ -304,86 +349,213 @@ class Game{
         this.ball = new Ball(gCan,this.puddle);
 
         this.blocks = [];
-
+        
         for(let i=0; i<10; i++){
             for(let j=0; j<12; j++){
-                this.blocks.push(new Block(j*50,i*10,50,10))
+                if(Math.random()>0){
+                    this.blocks.push(new Block(j*30,i*30,30,30))
+
+                }
             }
         }
-        
+        this.segments = [new Segment({x:0,y:gCan.height},{x:0,y:0}),new Segment({x:0,y:0},{x:gCan.width,y:0}),new Segment({x:gCan.width,y:0},{x:gCan.width,y:gCan.height})];
+
 
     }
     render(){
-        
+
+
         this.puddle.draw();
         this.puddle.update()
         this.ball.draw();
         this.ball.update();
 
-
         this.blocks = this.blocks.filter(b => !b.delete)
+        this.segments = this.segments.filter(b => !b.delete)
+ 
+        let hits = []
         this.blocks.forEach(block => {
             block.draw();
-
+            //ボールと当たるか
             const blockSegments = [
                 {A:{x:block.x,y:block.y},B:{x:block.x+block.w,y:block.y}},
                 {A:{x:block.x+block.w,y:block.y},B:{x:block.x+block.w,y:block.y+block.h}},
                 {A:{x:block.x+block.w,y:block.y+block.h},B:{x:block.x,y:block.y+block.h}},
                 {A:{x:block.x,y:block.y+block.h},B:{x:block.x,y:block.y}},
             ]
-            blockSegments.forEach(seg=>{
-                //seg.A,B ball=C,ballBef=D
-                //AB,AC,AD
-                //CD,CA,CB
-                let ax = seg.A.x;
-                let ay = seg.A.y;
-                let bx = seg.B.x;
-                let by = seg.B.y;
-                let cx = this.ball.x+Math.cos(this.ball.angle)*this.ball.r
-                let cy = this.ball.y+Math.sin(this.ball.angle)*this.ball.r
-                let dx = this.ball.xBef-Math.cos(this.ball.angle)*this.ball.r
-                let dy = this.ball.yBef-Math.sin(this.ball.angle)*this.ball.r
-                let vAB = {x:bx-ax,y:by-ay};
-                let vAC = {x:cx-ax,y:cy-ay}
-                let vAD = {x:dx-ax,y:dy-ay}
-                let vCD = {x:dx-cx,y:dy-cy}
-                let vCA = {x:ax-cx,y:ay-cy}
-                let vCB = {x:bx-cx,y:by-cy}
-                let crossProduct1 = vAB.x*vAC.y - vAB.y*vAC.x
-                let crossProduct2 = vAB.x*vAD.y - vAB.y*vAD.x
-                let crossProduct3 = vCD.x*vCA.y - vCD.y*vCA.x
-                let crossProduct4 = vCD.x*vCB.y - vCD.y*vCB.x
-                let f = false;
-                if(Math.sign(crossProduct1)<0){
-                    if(Math.sign(crossProduct2)>0){
-                        f = true;
-                    }
-                }else{
-                    if(Math.sign(crossProduct2)<0){
-                        f = true;
-                    }
-                }
-                if(f){
-                    if(Math.sign(crossProduct3)<0){
-                        if(Math.sign(crossProduct4)>0){
-                            block.delete = true;
-                            this.ball.dx = Math.cos(this.ball.angle);
-                            this.ball.dy = -this.ball.dy;
-                        }
-                    }else{
-                        if(Math.sign(crossProduct4)<0){
-                            block.delete = true;
-                            this.ball.dx = Math.cos(this.ball.angle)
-                            this.ball.dy = -this.ball.dy;
-                        }
-                    }
-                }
-            })
-        })
+            
+            for(let i=0; i<this.ball.collisionAreas.length; i++){
+                blockSegments.forEach(seg => {
+                    let vScreen = {x:seg.B.x-seg.A.x,y:seg.B.y-seg.A.y};
+                    let vAToC = {x:this.ball.collisionAreas[i].x-seg.A.x,y:this.ball.collisionAreas[i].y-seg.A.y}
+                    let vBToC = {x:this.ball.collisionAreas[i].x-seg.B.x,y:this.ball.collisionAreas[i].y-seg.B.y}
 
+                    let screenLength = Math.sqrt(vScreen.x**2+vScreen.y**2);
+                    let screenUnit = {x:vScreen.x/screenLength,y:vScreen.y/screenLength};
+
+                    let segToCircleShortestLength = Math.abs(screenUnit.x*vBToC.y - screenUnit.y*vBToC.x);
+                    if(segToCircleShortestLength<this.ball.r){
+                        
+                        let vStartInnerProduct = vScreen.x*vAToC.x + vScreen.y*vAToC.y
+                        let vEndInnerProduct = vScreen.x*vBToC.x + vScreen.y*vBToC.y
+                    
+                        let AtoCDistance = Math.sqrt(vAToC.x**2 + vAToC.y**2)
+                        let BtoCDistance = Math.sqrt(vBToC.x**2 + vBToC.y**2)
+                        if((vStartInnerProduct>0&&vEndInnerProduct<0) || (vStartInnerProduct<0&&vEndInnerProduct>0)){
+                            //線に当たった時
+                            hits.push({seg,block,dis:segToCircleShortestLength,index:i})
+                            return;
+                        }else if(AtoCDistance<this.ball.r || BtoCDistance<this.ball.r){
+                            //線の端に当たった時
+                            let near = AtoCDistance<BtoCDistance ? AtoCDistance : BtoCDistance;
+                            hits.push({seg,block,dis:near,index:i});
+                            return;
+                        }
+                    }
+                }) 
+            }
+        })
+        if(hits.length > 0){
+            let minIndex = getMin(hits,"index").index
+            let newHits = []
+            hits.forEach(item => {
+                if(item.index === minIndex)newHits.push(item)
+            })
+            let hitData = getMin(newHits,"dis");
+            let hitArea = this.ball.collisionAreas[hitData.index];
+            let hitSeg = hitData.seg
+            let segM = Math.abs((hitSeg.B.x-hitSeg.A.x) / (hitSeg.B.y-hitSeg.A.y))
+            if(segM===0){
+                let circlePos = hitSeg.A.x<this.ball.xBef ? this.ball.r : -this.ball.r
+                this.ball.x = hitSeg.A.x+circlePos;
+                this.ball.y = hitArea.y
+                this.ball.dx = -this.ball.dx
+            }else if(segM===Infinity){
+                let circlePos = hitSeg.A.y<this.ball.yBef ? this.ball.r : -this.ball.r
+                this.ball.y = hitSeg.A.y+circlePos;
+                this.ball.x = hitArea.x
+                this.ball.dy = -this.ball.dy
+            }
+            hitData.block.delete = true;
+        
+        }
+        hits = []
+        this.segments.forEach(seg => {
+            seg.draw();
+            for(let i=0; i<this.ball.collisionAreas.length; i++){
+                let vScreen = {x:seg.B.x-seg.A.x,y:seg.B.y-seg.A.y};
+                let vAToC = {x:this.ball.collisionAreas[i].x-seg.A.x,y:this.ball.collisionAreas[i].y-seg.A.y}
+                let vBToC = {x:this.ball.collisionAreas[i].x-seg.B.x,y:this.ball.collisionAreas[i].y-seg.B.y}
+
+                let screenLength = Math.sqrt(vScreen.x**2+vScreen.y**2);
+                let screenUnit = {x:vScreen.x/screenLength,y:vScreen.y/screenLength};
+
+                let segToCircleShortestLength = Math.abs(screenUnit.x*vBToC.y - screenUnit.y*vBToC.x);
+                if(segToCircleShortestLength<this.ball.r){
+                    
+                    let vStartInnerProduct = vScreen.x*vAToC.x + vScreen.y*vAToC.y
+                    let vEndInnerProduct = vScreen.x*vBToC.x + vScreen.y*vBToC.y
+             
+                    let AtoCDistance = Math.sqrt(vAToC.x**2 + vAToC.y**2)
+                    let BtoCDistance = Math.sqrt(vBToC.x**2 + vBToC.y**2)
+                    if((vStartInnerProduct>0&&vEndInnerProduct<0) || (vStartInnerProduct<0&&vEndInnerProduct>0)){
+                        //線に当たった時
+                        hits.push({seg,dis:segToCircleShortestLength,index:i})
+                        return;
+                    }else if(AtoCDistance<this.ball.r || BtoCDistance<this.ball.r){
+                        //線の端に当たった時
+                        //let near = AtoCDistance<BtoCDistance ? AtoCDistance : BtoCDistance;
+                        //hits.push({seg,dis:near,index:i});
+                        //return;
+                    }
+                }
+            }
+        })
+        if(hits.length > 0){
+            let minIndex = getMin(hits,"index").index
+            let newHits = []
+            hits.forEach(item => {
+                if(item.index === minIndex)newHits.push(item)
+            })
+        let hitData = getMin(newHits,"dis");
+        let hitArea = this.ball.collisionAreas[hitData.index];
+        let hitSeg = hitData.seg
+        let segM = Math.abs((hitSeg.B.x-hitSeg.A.x) / (hitSeg.B.y-hitSeg.A.y))
+        if(segM===0){
+            let circlePos = hitSeg.A.x<this.ball.xBef ? this.ball.r : -this.ball.r
+            this.ball.x = hitSeg.A.x+circlePos;
+            this.ball.dx = -this.ball.dx
+        }else if(segM===Infinity){
+            let circlePos = hitSeg.A.y<this.ball.yBef ? this.ball.r : -this.ball.r
+            this.ball.y = hitSeg.A.y+this.ball.r;
+            this.ball.dy = -this.ball.dy
+        }
+        
+        }
+    }
+    ballBound(status){
+        const Ix = status.x;
+        const Iy = status.y;
+        const A = status.seg.A
+        const B = status.seg.B
+        const C = {x:this.ball.xBef,y:this.ball.yBef}
+        const D = {x:this.ball.x,y:this.ball.y}
+
+        const vAB = {x:B.x-A.x,y:B.y-A.y}
+        const vAC = {x:C.x-A.x,y:C.y-A.y}
+        const crossProduct = vAB.x*vAC.y - vAB.y*vAC.x;
+        const clockwise = crossProduct < 0 ? Math.PI/2 : -Math.PI/2;
+        const offsetAngle = Math.atan2(A.y-Iy,A.x-Ix) + clockwise;
+
+        const Cdash = {dis:Math.sqrt((C.x-Ix)**2+(C.y-Iy)**2),ang:Math.atan2(C.y-Iy,C.x-Ix)-offsetAngle};
+
+        const incidenceAngle = Math.atan2(Math.sin(Cdash.ang)*Cdash.dis,Math.cos(Cdash.ang)*Cdash.dis)
+        
+        const refrectDis = Math.sqrt((D.x-Ix)**2+(D.y-Iy)**2);
+        const refrectAng = Math.atan2(C.y-Iy,C.x-Ix)-incidenceAngle*2
+
+        this.ball.x = Ix + Math.cos(refrectAng)*this.ball.r
+        this.ball.y = Iy + Math.sin(refrectAng)*this.ball.r
+        this.ball.dx = Math.cos(refrectAng);
+        this.ball.dy = Math.sin(refrectAng)
     }
 }
+function getMin(array, keyName) {
+	let min = null;
+    let index = null;
+    for(let i=0; i<array.length; i++){
+        if(min === null){
+            min = array[0][keyName];
+            index = 0;
+        }else if(min>array[i][keyName]){
+            min = array[i][keyName];
+            index = i
+        }
+    }
+	return array[index];
+};
+function lerp(A,B,t){
+    return A+(B-A)*t;
+}
 
+function getIntersection(A,B,C,D){
+    const tTop=(D.x - C.x)*(A.y - C.y) - (D.y - C.y)*(A.x - C.x)
+    const uTop=(C.y - A.y)*(A.x - B.x) - (C.x - A.x)*(A.y - B.y);
+    const bottom = (D.y - C.y)*(B.x - A.x) - (D.x - C.x)*(B.y - A.y);
+
+    if(bottom!=0){
+        const t = tTop/bottom;
+        const u=uTop/bottom;
+        if(t>=0 && t<=1 && u>=0 && u<=1){
+            return {
+                x:lerp(A.x,B.x,t),
+                y:lerp(A.y,B.y,t),
+                offset:t
+            }
+        }
+    }
+    return null;
+}
 
 const touchPanel = new TouchPanel(tCan)
 const tStatus = touchPanel.touch
@@ -400,55 +572,8 @@ function animate(){
 
     requestAnimationFrame(animate);
 }
-
 animate();
 
-
-function lineCircleCollision(A,B,circle) {//{A:x,y}{circle:x,y,r}
-    function len_vec2(vec) {
-      return vec[0] * vec[0] + vec[1] * vec[1];
-    }
-    
-    function inner_prod(vec1, vec2) {
-      return vec1[0] * vec2[0] + vec1[1] * vec2[1];
-    }
-  
-    var pos_o = [circle.x, circle.y];
-    var r = circle.r;
-    var pos_a = [A.x, A.y];
-    var pos_b = [B.x, B.y];
-  
-    if (pos_a[0] === pos_b[0] && pos_a[1] === pos_b[1]) {
-      return false;
-    }
-  
-    if (r <= 0) {
-      return false;
-    }
-  
-    var vec_oa = [pos_a[0] - pos_o[0], pos_a[1] - pos_o[1]];
-    var vec_ob = [pos_b[0] - pos_o[0], pos_b[1] - pos_o[1]];
-  
-    var len_oa2 = len_vec2(vec_oa);
-    var len_ob2 = len_vec2(vec_ob);
-    var inner_ab = inner_prod(vec_oa, vec_ob);
-  
-    var a = len_oa2 + len_ob2 - 2 * inner_ab;
-    var b = -2 * len_oa2 + 2 * inner_ab;
-    var c = len_oa2 - r * r;
-  
-    var det = b * b - 4 * a * c;
-    if (det < 0) {
-      return false;
-    }
-  
-    var s1 = (-b - Math.sqrt(det)) / (2 * a);
-    var s2 = (-b + Math.sqrt(det)) / (2 * a);
-  
-    return (s1 <= 1) && (0 <= s2);
-  }
-
-  
   function positionLC(A,B,C) {
     const v1 = {x:B.x-A.x,y:B.y-A.y};
     const v2 = {x:C.x-A.x,y:C.y-A.y};
