@@ -172,8 +172,13 @@ class Ball {
 
 
         //離す前、後
-        if(tStatus.swipe === "up")this.release = true;
+        if(tStatus.swipe === "up" && !this.release){
+            this.release = true;
+            this.dx = -0.5;
+            this.dy = -0.5;
+        }
         if(this.release){
+
             this.x += this.dx* this.speed;
             this.y += this.dy* this.speed
         }else{
@@ -198,8 +203,15 @@ class Ball {
         //パドル反射
         if(this.y>this.puddle.y-this.r && this.x>this.puddle.x && this.x<this.puddle.x+this.puddle.w){
 
+            this.dx = Math.cos(Math.atan2(-this.dy,this.dx))
+            this.dy = Math.sin(Math.atan2(-this.dy,this.dx))
+            let pAngle = Math.atan2(1,this.puddle.move);
+            if(pAngle !== 0){
+                this.dx += Math.cos(Math.atan2(-1,this.puddle.move))/2
+            }
+
+
             this.y = this.puddle.y-this.r;
-            this.dy *= -1
         }
         //下判定
         else if(this.y+this.r>this.can.height)console.log("game over")
@@ -218,7 +230,6 @@ class Ball {
         gCtx.stroke();
     }
 }
-
 class Puddle {
     static width = 100;
     static height = 30;
@@ -232,8 +243,16 @@ class Puddle {
 
         this.sx = this.x;
         this.sensitivity = 1.8
+
+        this.befPos = 0;
+        this.moves = [];
+        this.move = 0;
     }
     update(){
+        this.moves.push(this.x - this.befPos);
+        if(this.moves.length>10)this.moves.splice(0,1)
+        this.move = (this.moves.reduce((total,current) => total + current, 0))/this.moves.length;
+        this.befPos = this.x;
         let gap = tStatus.x - tStatus.sx;
         if(tStatus.start)this.sx = this.x;
         if(tStatus.touch)this.x = this.sx + gap*this.sensitivity
